@@ -47,68 +47,45 @@ def get_DailyDialogue_loaders(path, batch_size=32, num_workers=0, pin_memory=Fal
         return train_loader, valid_loader, test_loader
 
 def process_data_loader(data, cuda):
-    
-    input_sequence, qmask, umask, act_labels, emotion_labels, max_sequence_lengths, _ = data
-    input_sequence = input_sequence[:, :, :max(max_sequence_lengths)]
+    input_sequence, qmask, umask, max_sequence_lengths = data
+    max_sequence_lengths = torch.max(max_sequence_lengths).item()
+    max_sequence_lengths = int(max_sequence_lengths)
+    input_sequence = input_sequence[:, :, :max_sequence_lengths]
     
     if cuda:
         input_sequence, qmask, umask = input_sequence.cuda(), qmask.cuda(), umask.cuda()
         emotion_labels = emotion_labels.cuda()
     
-    return [input_sequence, qmask, umask, emotion_labels]
+    return [input_sequence, qmask, umask]
 
-
-def train_or_eval_model(model, loss_function, dataloader, optimizer=None, train=False, cuda=False):
-    losses = []
+def eval_model(model, dataloader, cuda=False):
     preds = []
-    labels = []
     masks = []
     alphas, alphas_f, alphas_b, vids = [], [], [], []
-    assert not train or optimizer!=None
-    if train:
-        model.train()
-    else:
-        model.eval()
-    for data in dataloader:
-        if train:
-            optimizer.zero_grad()
-        
-        input_sequence, qmask, umask, label = process_data_loader(data, cuda)
+    model.eval()
+    for data in dataloader:        
+        input_sequence, qmask, umask = process_data_loader(data, cuda)
         log_prob, alpha, alpha_f, alpha_b = model(input_sequence, qmask, umask)
         
         lp_ = log_prob.transpose(0, 1).contiguous().view(-1, log_prob.size()[2])      
-        labels_ = label.view(-1)
-        loss = loss_function(lp_, labels_, umask)
 
         pred_ = torch.argmax(lp_, 1)
         preds.append(pred_.data.cpu().numpy())
-        labels.append(labels_.data.cpu().numpy())
         masks.append(umask.view(-1).cpu().numpy())
 
-        losses.append(loss.item()*masks[-1].sum())
-        if train:
-            loss.backward()
-            # if args.tensorboard:
-            #     for param in model.named_parameters():
-            #         writer.add_histogram(param[0], param[1].grad, epoch)
-            optimizer.step()
-        else:
-            alphas += alpha
-            alphas_f += alpha_f
-            alphas_b += alpha_b
-            vids += data[-1]
+
+        alphas += alpha
+        alphas_f += alpha_f
+        alphas_b += alpha_b
+        vids += data[-1]
 
     if preds!=[]:
         preds  = np.concatenate(preds)
-        labels = np.concatenate(labels)
         masks  = np.concatenate(masks)
     else:
         return float('nan'), float('nan'), [], [], [], float('nan'), []
 
-    avg_loss = round(np.sum(losses)/np.sum(masks),4)
-    avg_accuracy = round(accuracy_score(labels,preds,sample_weight=masks)*100,2)
-    avg_fscore = round(f1_score(labels,preds,sample_weight=masks,average='micro', labels=[0,2,3,4,5,6])*100,2)
-    return avg_loss, avg_accuracy, labels, preds, masks,avg_fscore, [alphas, alphas_f, alphas_b, vids]
+    return preds, [alphas, alphas_f, alphas_b, vids]
 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
@@ -157,28 +134,22 @@ if __name__ == '__main__':
         
     loss_function = MaskedNLLLoss()
 
-    tmp = get_DailyDialogue_loaders('dailydialog/daily_dialogue.pkl', batch_size=config['batch_size'], num_workers=0)
+    # tmp = get_DailyDialogue_loaders('dailydialog/daily_dialogue.pkl', batch_size=config['batch_size'], num_workers=0)
+    # train, val, test = tmp
+    # for i in train:
+    #     print(i)
     test_loader = get_LLM_loaders('dailydialog/human_annotation_clean.csv', batch_size=config['batch_size'], num_workers=0)
 
     best_loss, best_label, best_pred, best_mask = None, None, None, None
 
     start_time = time.time()
-    test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions = train_or_eval_model(model, loss_function, test_loader, cuda=cuda)
-
-    if best_loss == None or best_loss > test_loss:
-        best_loss, best_label, best_pred, best_mask, best_attn =\
-                test_loss, test_label, test_pred, test_mask, attentions
+    test_pred, attentions = eval_model(model, test_loader, cuda=cuda)
 
     # if args.tensorboard:
-    #     writer.add_scalar('test: accuracy/loss', test_acc/test_loss, )
-    print('test_loss {} test_acc {} test_fscore {} time {}'.\
-            format(test_loss, test_acc, test_fscore, round(time.time()-start_time, 2)))
+    # #     writer.close()
 
-    # if args.tensorboard:
-    #     writer.close()
-
-    print('Test performance..')
-    print('Loss {} F1-score {}'.format(best_loss,
-                                     round(f1_score(best_label,best_pred,sample_weight=best_mask, average='micro', labels=[0,2,3,4,5,6])*100,2)))
-    print(classification_report(best_label,best_pred,sample_weight=best_mask,labels=[0,2,3,4,5,6],digits=4))
-    print(confusion_matrix(best_label,best_pred,sample_weight=best_mask))
+    # print('Test performance..')
+    # print('Loss {} F1-score {}'.format(best_loss,
+    #                                  round(f1_score(best_label,best_pred,sample_weight=best_mask, average='micro', labels=[0,2,3,4,5,6])*100,2)))
+    # print(classification_report(best_label,best_pred,sample_weight=best_mask,labels=[0,2,3,4,5,6],digits=4))
+    # print(confusion_matrix(best_label,best_pred,sample_weight=best_mask))

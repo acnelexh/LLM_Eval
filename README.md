@@ -29,4 +29,4 @@ Dont need to touch this part really, just need a model to test the evalutation s
 python3 eval.py
 ```
 TODO dataloader.py, under LLMDataset, needs a few more touch.
-You can compare the desire output with __getiten__() in DailyDialogueDataset.
+You can compare the desire output with __getitem__() in DailyDialogueDataset.

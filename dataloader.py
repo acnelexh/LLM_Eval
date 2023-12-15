@@ -134,6 +134,8 @@ class DailyDialogueDataset(Dataset):
         return self.len
 
 
+from keras.preprocessing.sequence import pad_sequences
+
 class LLMDataset(Dataset):
     # TODO
     def __init__(self, path):
@@ -141,9 +143,9 @@ class LLMDataset(Dataset):
         # save
         self.df = df
 
-        #self.Speakers: list of list of 1 and 0
-        #self.InputSequence: list of list of array of int
-        #self.InputMaxSequenceLength: list of int
+        #self.Speakers: list of list of 1 and 0 # DONE
+        #self.InputSequence: list of list of array of int # DONE
+        #self.InputMaxSequenceLength: list of int # DONE
         #self.ActLabels: list of list of int
         #self.EmotionLabels: list of list of int
 
@@ -164,34 +166,32 @@ class LLMDataset(Dataset):
         for i in range(len(self.df)):
             # read in parsed dialog as list of string
             parsed_sequence = self.tokenizer.texts_to_sequences(self.df['dialog_parsed'][i])
+            # zero pad each sentence to 250
+            parsed_sequence = pad_sequences(parsed_sequence, maxlen=250, padding='post')
             df.at[i, 'InputSequence'] = parsed_sequence
         self.df['InputMaxSequenceLength'] = self.df['InputSequence'].apply(lambda x: len(x))
 
         self.df['agents'] = self.df['agents'].apply(ast.literal_eval)
         self.Speakers = self.df['agents'].tolist()
-
-        pass
         
-            
-
     def __getitem__(self, index):
-        conv = self.keys[index]
 
+        conv = self.df.iloc[index]
+
+        return torch.LongTensor(conv['InputSequence']), \
+                torch.FloatTensor([[1,0] if x=='0' else [0,1] for x in conv['agents']]),\
+                torch.FloatTensor([1]*len(conv['dialog_parsed'])), \
+                torch.Tensor([conv['InputMaxSequenceLength']])
         
-        return torch.LongTensor(self.InputSequence[conv]), \
-                torch.FloatTensor([[1,0] if x=='0' else [0,1] for x in self.Speakers[conv]]),\
-                torch.FloatTensor([1]*len(self.ActLabels[conv])), \
-                torch.LongTensor(self.ActLabels[conv]), \
-                torch.LongTensor(self.EmotionLabels[conv]), \
-                self.InputMaxSequenceLength[conv], \
-                conv
+        # return torch.LongTensor(self.InputSequence[conv]), \
+        #         torch.FloatTensor([[1,0] if x=='0' else [0,1] for x in self.Speakers[conv]]),\
+        #         torch.FloatTensor([1]*len(self.ActLabels[conv])), \
+        #         self.InputMaxSequenceLength[conv]
 
     def __len__(self):
         return self.len
 
-
 class LLMPadCollate:
-    # TODO
     def __init__(self, dim=0):
         self.dim = dim
 
@@ -219,7 +219,6 @@ class LLMPadCollate:
                 pad_sequence(dat[i]) if i == 1 else \
                 pad_sequence(dat[i], True) if i < 5 else \
                 dat[i].tolist() for i in dat]
-
 
 
 class DailyDialoguePadCollate:
