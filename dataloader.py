@@ -116,6 +116,9 @@ class DailyDialogueDataset(Dataset):
 
         self.len = len(self.keys)
 
+        # with open('dailydialog/tokenizer.pkl', 'rb') as f:
+        #     self.tokenizer = pickle.load(f)  
+
     def __getitem__(self, index):
         conv = self.keys[index]
         
@@ -160,15 +163,14 @@ class LLMDataset(Dataset):
         self.df['InputSequence'] = ''
         for i in range(len(self.df)):
             # read in parsed dialog as list of string
-            parsed_dialog = self.df['dialog_parsed'][i]
-            sequence = []
-            for dialog in parsed_dialog:
-                # tokenize dialog
-                tokenized_dialog = self.tokenizer.texts_to_sequences(dialog)
-                # append to InputSequence
-                sequence.append(tokenized_dialog)
+            parsed_sequence = self.tokenizer.texts_to_sequences(self.df['dialog_parsed'][i])
+            df.at[i, 'InputSequence'] = parsed_sequence
+        self.df['InputMaxSequenceLength'] = self.df['InputSequence'].apply(lambda x: len(x))
+
+        self.df['agents'] = self.df['agents'].apply(ast.literal_eval)
         self.Speakers = self.df['agents'].tolist()
-        self.InputSequence = self.df['InputSequence'].tolist()
+
+        pass
         
             
 
