@@ -4,14 +4,15 @@ import argparse, time, pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from keras import preprocessing
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, classification_report
 from model import E2ELSTMModel, MaskedNLLLoss
-from dataloader import LLMPadCollate, LLMDataset
+from dataloader import LLMPadCollate, LLMDataset, DailyDialogueDataset, DailyDialoguePadCollate
 
 def get_LLM_loaders(path, batch_size=32, num_workers=0, pin_memory=False):
-    testset = LLMDataset(path, 'test')
+    testset = LLMDataset(path)
 
     test_loader = DataLoader(testset,
                              batch_size=batch_size,
@@ -21,6 +22,29 @@ def get_LLM_loaders(path, batch_size=32, num_workers=0, pin_memory=False):
 
     return test_loader
 
+def get_DailyDialogue_loaders(path, batch_size=32, num_workers=0, pin_memory=False):
+        
+        trainset = DailyDialogueDataset(path, 'train')
+        testset = DailyDialogueDataset(path, 'test')
+        validset = DailyDialogueDataset(path, 'valid')
+    
+        train_loader = DataLoader(trainset,
+                                batch_size=batch_size,
+                                collate_fn = DailyDialoguePadCollate(dim=0),
+                                num_workers=num_workers,
+                                pin_memory=pin_memory)
+        valid_loader = DataLoader(validset,
+                                batch_size=batch_size,
+                                collate_fn = DailyDialoguePadCollate(dim=0),
+                                num_workers=num_workers,
+                                pin_memory=pin_memory)
+        test_loader = DataLoader(testset,
+                                batch_size=batch_size,
+                                collate_fn = DailyDialoguePadCollate(dim=0),
+                                num_workers=num_workers,
+                                pin_memory=pin_memory)
+    
+        return train_loader, valid_loader, test_loader
 
 def process_data_loader(data, cuda):
     
@@ -86,8 +110,7 @@ def train_or_eval_model(model, loss_function, dataloader, optimizer=None, train=
     avg_fscore = round(f1_score(labels,preds,sample_weight=masks,average='micro', labels=[0,2,3,4,5,6])*100,2)
     return avg_loss, avg_accuracy, labels, preds, masks,avg_fscore, [alphas, alphas_f, alphas_b, vids]
 
-if __name__ == '__main__':
-
+if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-cuda', action='store_true', default=False, help='does not use GPU')
     parser.add_argument('--checkpoint', type=str, default='dailydialog/best_model.pt', help='path to checkpoint')
@@ -134,7 +157,8 @@ if __name__ == '__main__':
         
     loss_function = MaskedNLLLoss()
 
-    test_loader = get_LLM_loaders('dailydialog/daily_dialogue.pkl', batch_size=config['batch_size'], num_workers=0)
+    tmp = get_DailyDialogue_loaders('dailydialog/daily_dialogue.pkl', batch_size=config['batch_size'], num_workers=0)
+    test_loader = get_LLM_loaders('dailydialog/human_annotation_clean.csv', batch_size=config['batch_size'], num_workers=0)
 
     best_loss, best_label, best_pred, best_mask = None, None, None, None
 

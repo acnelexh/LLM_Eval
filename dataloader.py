@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 import pickle
 import pandas as pd
+import ast
 
 class IEMOCAPDataset(Dataset):
 
@@ -131,18 +132,49 @@ class DailyDialogueDataset(Dataset):
 
 
 class LLMDataset(Dataset):
+    # TODO
+    def __init__(self, path):
+        df = pd.read_csv(path)
+        # save
+        self.df = df
 
-    def __init__(self, path, split):
-        
-        self.Speakers, self.InputSequence, self.InputMaxSequenceLength, \
-        self.ActLabels, self.EmotionLabels, self.trainId, self.testId, self.validId = pickle.load(open(path, 'rb'))
-        
-        self.keys = [x for x in self.testId]
+        #self.Speakers: list of list of 1 and 0
+        #self.InputSequence: list of list of array of int
+        #self.InputMaxSequenceLength: list of int
+        #self.ActLabels: list of list of int
+        #self.EmotionLabels: list of list of int
 
-        self.len = len(self.keys)
+        # columns = ['dialog', 'emotion1', 'emotion2', 'persona', 'emotion1_gpt', 
+        #            'emotion2_gpt', 'emotion_by_sentence_gpt', 'train_gpt', 'dialog_parsed',
+        #            'agents', 'annotations_emo1', 'annotations_emo2']
+        # self.Speakers, self.InputSequence, self.InputMaxSequenceLength, \
+        # self.ActLabels, self.EmotionLabels, self.trainId, self.testId, self.validId = pickle.load(open(path, 'rb'))
+        self.len = len(df)
+
+        with open('dailydialog/tokenizer.pkl', 'rb') as f:
+            self.tokenizer = pickle.load(f)  
+
+        # tokenize inputsequence
+        # add inputsequence column
+        self.df['dialog_parsed'] = df['dialog_parsed'].apply(ast.literal_eval)
+        self.df['InputSequence'] = ''
+        for i in range(len(self.df)):
+            # read in parsed dialog as list of string
+            parsed_dialog = self.df['dialog_parsed'][i]
+            sequence = []
+            for dialog in parsed_dialog:
+                # tokenize dialog
+                tokenized_dialog = self.tokenizer.texts_to_sequences(dialog)
+                # append to InputSequence
+                sequence.append(tokenized_dialog)
+        self.Speakers = self.df['agents'].tolist()
+        self.InputSequence = self.df['InputSequence'].tolist()
+        
+            
 
     def __getitem__(self, index):
         conv = self.keys[index]
+
         
         return torch.LongTensor(self.InputSequence[conv]), \
                 torch.FloatTensor([[1,0] if x=='0' else [0,1] for x in self.Speakers[conv]]),\
@@ -157,7 +189,7 @@ class LLMDataset(Dataset):
 
 
 class LLMPadCollate:
-
+    # TODO
     def __init__(self, dim=0):
         self.dim = dim
 
