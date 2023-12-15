@@ -22,18 +22,19 @@ def get_LLM_loaders(path, batch_size=32, num_workers=0, pin_memory=False):
     return test_loader
 
 
-def process_data_loader(data):
+def process_data_loader(data, cuda):
     
     input_sequence, qmask, umask, act_labels, emotion_labels, max_sequence_lengths, _ = data
     input_sequence = input_sequence[:, :, :max(max_sequence_lengths)]
     
-    input_sequence, qmask, umask = input_sequence.cuda(), qmask.cuda(), umask.cuda()
-    emotion_labels = emotion_labels.cuda()
+    if cuda:
+        input_sequence, qmask, umask = input_sequence.cuda(), qmask.cuda(), umask.cuda()
+        emotion_labels = emotion_labels.cuda()
     
     return [input_sequence, qmask, umask, emotion_labels]
 
 
-def train_or_eval_model(model, loss_function, dataloader, optimizer=None, train=False):
+def train_or_eval_model(model, loss_function, dataloader, optimizer=None, train=False, cuda=False):
     losses = []
     preds = []
     labels = []
@@ -48,7 +49,7 @@ def train_or_eval_model(model, loss_function, dataloader, optimizer=None, train=
         if train:
             optimizer.zero_grad()
         
-        input_sequence, qmask, umask, label = process_data_loader(data)
+        input_sequence, qmask, umask, label = process_data_loader(data, cuda)
         log_prob, alpha, alpha_f, alpha_b = model(input_sequence, qmask, umask)
         
         lp_ = log_prob.transpose(0, 1).contiguous().view(-1, log_prob.size()[2])      
@@ -89,7 +90,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-cuda', action='store_true', default=False, help='does not use GPU')
-    parser.add_argument('--checkpoint', type=str, default='', help='path to checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='dailydialog/best_model.pt', help='path to checkpoint')
     args = parser.parse_args()
 
     print(args)
@@ -138,7 +139,7 @@ if __name__ == '__main__':
     best_loss, best_label, best_pred, best_mask = None, None, None, None
 
     start_time = time.time()
-    test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions = train_or_eval_model(model, loss_function, test_loader)
+    test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions = train_or_eval_model(model, loss_function, test_loader, cuda=cuda)
 
     if best_loss == None or best_loss > test_loss:
         best_loss, best_label, best_pred, best_mask, best_attn =\
