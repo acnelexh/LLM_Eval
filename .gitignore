@@ -1,0 +1,9 @@
+env/
+AVEC_features/
+IEMOCAP_features/
+MELD_features/
+train_IEMOCAP.py
+train_MELD.py
+.DS_Store
+__pycache__/
+dailydialog.zip
