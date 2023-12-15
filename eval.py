@@ -80,8 +80,8 @@ def eval_model(model, dataloader, cuda=False):
         vids += data[-1]
 
     if preds!=[]:
-        preds  = np.concatenate(preds)
-        masks  = np.concatenate(masks)
+        #preds  = np.concatenate(preds)
+        pass
     else:
         return float('nan'), float('nan'), [], [], [], float('nan'), []
 
@@ -138,12 +138,15 @@ if __name__ == '__main__':
     # train, val, test = tmp
     # for i in train:
     #     print(i)
-    test_loader = get_LLM_loaders('dailydialog/human_annotation_clean.csv', batch_size=config['batch_size'], num_workers=0)
+    test_loader = get_LLM_loaders('dailydialog/human_annotation_clean.csv', batch_size=1, num_workers=0)
 
     best_loss, best_label, best_pred, best_mask = None, None, None, None
 
     start_time = time.time()
     test_pred, attentions = eval_model(model, test_loader, cuda=cuda)
+
+    print(len(test_pred))
+    
 
     # if args.tensorboard:
     # #     writer.close()
