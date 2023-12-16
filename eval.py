@@ -54,7 +54,7 @@ def process_data_loader(data, cuda):
     
     if cuda:
         input_sequence, qmask, umask = input_sequence.cuda(), qmask.cuda(), umask.cuda()
-        emotion_labels = emotion_labels.cuda()
+        #emotion_labels = emotion_labels.cuda()
     
     return [input_sequence, qmask, umask]
 
@@ -146,6 +146,8 @@ if __name__ == '__main__':
     test_pred, attentions = eval_model(model, test_loader, cuda=cuda)
 
     print(len(test_pred))
+    for i in test_pred:
+        print(i)
     
 
     # if args.tensorboard:
